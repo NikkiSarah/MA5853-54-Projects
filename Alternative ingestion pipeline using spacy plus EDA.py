@@ -2,7 +2,10 @@
 import gensim
 import matplotlib.pyplot as plt
 import os
+
+import numpy as np
 import pandas as pd
+import regex as re
 import seaborn as sns
 
 import en_core_web_sm, en_core_web_trf
@@ -32,7 +35,7 @@ for pos in ['right', 'top']:
 plt.show()
 
 # alternatively... NPS-like
-# define a function to classify each review into an NPS group
+# define functions to classify each review into an NPS group
 def create_NPS_group(row):
     if row.score <= 3:
         group = 'Detractor'
@@ -44,6 +47,18 @@ def create_NPS_group(row):
 
 vodafone_reviews['nps_group'] = vodafone_reviews.apply(create_NPS_group, axis=1)
 
+def create_NPS_class(row):
+    if row.nps_group == 'Detractor':
+        nps_class = -1
+    elif row.nps_group == 'Passive':
+        nps_class = 0
+    else:
+        nps_class = 1
+    return nps_class
+
+vodafone_reviews['nps_class'] = vodafone_reviews.apply(create_NPS_class, axis=1)
+
+# plot the distribution of reviews by NPS group
 reviews2 = pd.value_counts(vodafone_reviews.nps_group.values).sort_index()
 plt.bar(x=reviews2.index, height=reviews2.values, color='#990000')
 plt.xlabel('NPS group')
@@ -53,30 +68,49 @@ for pos in ['right', 'top']:
     plt.gca().spines[pos].set_visible(False)
 plt.show()
 
-# calculate average character lengths of titles and reviews
-vodafone_reviews['title_length'] = vodafone_reviews.title.apply(lambda x: len(x))
-vodafone_reviews['review_length'] = vodafone_reviews.review.apply(lambda x: len(x))
+# calculate character and word lengths of titles and reviews
+vodafone_reviews['title_num_chars'] = vodafone_reviews.title.apply(lambda x: len(x))
+vodafone_reviews['review_num_chars'] = vodafone_reviews.review.apply(lambda x: len(x))
 
+vodafone_reviews['title_num_words'] = vodafone_reviews.title.apply(lambda x: len(re.findall(r'\w+', x)))
+vodafone_reviews['review_num_words'] = vodafone_reviews.review.apply(lambda x: len(re.findall(r'\w+', x)))
+
+# plot the distribution of character and word lengths
 plt.rcParams.update({'font.size': 9})
 
 fig, axs = plt.subplots(1, 2)
-axs[0].hist(vodafone_reviews.title_length, bins=70, edgecolor='#E60000', color='#990000')
+axs[0].hist(vodafone_reviews.title_num_chars, bins=70, edgecolor='#E60000', color='#990000')
 axs[0].spines['right'].set_visible(False)
 axs[0].spines['top'].set_visible(False)
 axs[0].set_xlabel('Number of characters')
 axs[0].set_ylabel('Number of titles')
-axs[1].hist(vodafone_reviews.review_length, bins=70, edgecolor='#E60000', color='#990000')
+axs[1].hist(vodafone_reviews.review_num_chars, bins=70, edgecolor='#E60000', color='#990000')
 axs[1].spines['right'].set_visible(False)
 axs[1].spines['top'].set_visible(False)
 axs[1].set_xlabel('Number of characters')
 axs[1].set_ylabel('Number of reviews');
+plt.show()
+
+fig, axs = plt.subplots(1, 2)
+axs[0].hist(vodafone_reviews.title_num_words, bins=25, edgecolor='#E60000', color='#990000')
+axs[0].spines['right'].set_visible(False)
+axs[0].spines['top'].set_visible(False)
+axs[0].set_xlabel('Number of words')
+axs[0].set_ylabel('Number of titles')
+axs[1].hist(vodafone_reviews.review_num_words, bins=70, edgecolor='#E60000', color='#990000')
+axs[1].spines['right'].set_visible(False)
+axs[1].spines['top'].set_visible(False)
+axs[1].set_xlabel('Number of words')
+axs[1].set_ylabel('Number of reviews');
+plt.show()
 
 # plot 1 detractors vs promoters titles
 # plot 2 detractors vs promoters reviews
 promoter_detractor_reviews = vodafone_reviews[vodafone_reviews.nps_group.isin(["Promoter", "Detractor"])]
 
+# characters
 fig, axs = plt.subplots(1, 2)
-p = sns.kdeplot(ax=axs[0], data=promoter_detractor_reviews, x='title_length', hue='nps_group', fill=True,
+p = sns.kdeplot(ax=axs[0], data=promoter_detractor_reviews, x='title_num_chars', hue='nps_group', fill=True,
                 common_norm=False, palette=['#990000', '#4a4d4e'], legend=False)
 p.spines['right'].set_visible(False)
 p.spines['top'].set_visible(False)
@@ -89,7 +123,7 @@ annot = pd.DataFrame({
 for point in range(0,len(annot)):
      p.text(annot.x[point], annot.y[point], annot.text[point], horizontalalignment='left')
 
-p2 = sns.kdeplot(ax=axs[1], data=promoter_detractor_reviews, x='review_length', hue='nps_group', fill=True,
+p2 = sns.kdeplot(ax=axs[1], data=promoter_detractor_reviews, x='review_num_chars', hue='nps_group', fill=True,
                 common_norm=False, palette=['#990000', '#4a4d4e'], legend=False)
 p2.spines['right'].set_visible(False)
 p2.spines['top'].set_visible(False)
@@ -101,6 +135,43 @@ annot = pd.DataFrame({
 })
 for point in range(0,len(annot)):
      p2.text(annot.x[point], annot.y[point], annot.text[point], horizontalalignment='left')
+
+# words
+fig, axs = plt.subplots(1, 2)
+p = sns.kdeplot(ax=axs[0], data=promoter_detractor_reviews, x='title_num_words', hue='nps_group', fill=True,
+                common_norm=False, palette=['#990000', '#4a4d4e'], legend=False)
+p.spines['right'].set_visible(False)
+p.spines['top'].set_visible(False)
+p.set_xlabel("Number of words in title")
+annot = pd.DataFrame({
+    'x': [8, 12],
+    'y': [0.15, 0.02],
+    'text': ["Promoters", "Detractors",]
+})
+for point in range(0,len(annot)):
+     p.text(annot.x[point], annot.y[point], annot.text[point], horizontalalignment='left')
+
+p2 = sns.kdeplot(ax=axs[1], data=promoter_detractor_reviews, x='review_num_words', hue='nps_group', fill=True,
+                common_norm=False, palette=['#990000', '#4a4d4e'], legend=False)
+p2.spines['right'].set_visible(False)
+p2.spines['top'].set_visible(False)
+p2.set_xlabel("Number of words in review")
+annot = pd.DataFrame({
+    'x': [150, 300],
+    'y': [0.009, 0.001],
+    'text': ["Promoters", "Detractors",]
+})
+for point in range(0,len(annot)):
+     p2.text(annot.x[point], annot.y[point], annot.text[point], horizontalalignment='left')
+
+# calculate and plot the correlation between nps_group, customer rating, and title and review lengths
+numeric_features = vodafone_reviews.loc[:, ['score', 'nps_class', 'title_num_chars', 'review_num_chars', 'title_num_words', 'review_num_words']]
+corr = numeric_features.corr()
+
+fig, ax = plt.subplots()
+mask = np.zeros_like(numeric_features.corr())
+mask[np.triu_indices_from(mask)] = 1
+sns.heatmap(numeric_features.corr(), mask=mask, ax=ax, annot=True, cmap='Reds')
 
 ### Data Cleansing and Normalisation Pipeline ###
 
